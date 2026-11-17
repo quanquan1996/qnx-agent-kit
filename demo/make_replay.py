@@ -1,7 +1,7 @@
 """Build replay.html from the real run2 transcript (no invented steps)."""
 import json, re, sys, html
 RUN = '../agent-run/run2/run2.jsonl'
-REPO = sys.argv[1] if len(sys.argv) > 1 else 'github.com/<repo-after-approval>'
+REPO = sys.argv[1] if len(sys.argv) > 1 else 'github.com/quanquan1996/qnx-agent-kit'
 ev = []  # (kind, text)
 def short_res(name, txt):
     try: d = json.loads(txt)
