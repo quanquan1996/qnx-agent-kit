@@ -1,0 +1,2 @@
+{"mcpServers":{"qnx":{"command":"python3","args":["/work"],
+ "env":{"QNX_SYNC":"/work/agent-run/rt-loop=E:\\qnx-agent\\rt-loop","QNX_TARGET_IP":"192.168.56.102"}}}}

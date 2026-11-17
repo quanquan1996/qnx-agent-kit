@@ -1,0 +1,93 @@
+<!doctype html><html><head><meta charset="utf-8"><title>qnx-agent-kit demo</title>
+<style>
+html,body{margin:0;background:#0d1117;color:#e6edf3;font-family:Inter,Segoe UI,Helvetica,Arial,sans-serif;width:1280px;height:720px;overflow:hidden}
+.scene{position:absolute;inset:0;display:none;padding:48px 64px;box-sizing:border-box}
+.on{display:block}
+h1{font-size:54px;margin:150px 0 12px}
+h2{font-size:34px;margin:0 0 22px;color:#7ee787}
+.sub{font-size:26px;color:#8b949e}
+pre,.term{font-family:"JetBrains Mono",Consolas,"DejaVu Sans Mono",monospace;font-size:18px;line-height:1.45}
+table{border-collapse:collapse;font-size:24px;margin-top:12px}td,th{border:1px solid #30363d;padding:10px 18px;text-align:left}th{background:#161b22}
+.term{background:#010409;border:1px solid #30363d;border-radius:8px;padding:16px 20px;height:520px;overflow:hidden;white-space:pre-wrap;word-break:break-all}
+.say{color:#e6edf3}.say:before{content:"● ";color:#d2a8ff}
+.tool{color:#79c0ff}.tool:before{content:"⏵ ";color:#79c0ff}
+.out{color:#8b949e;padding-left:22px}.del{color:#ff7b72}.add{color:#7ee787}
+.hl{background:#5a1e02;color:#ffa657}.good{background:#033a16;color:#7ee787}
+#cap{position:absolute;left:0;right:0;bottom:0;background:rgba(22,27,34,.96);border-top:2px solid #d2a8ff;font-size:28px;padding:14px 64px;min-height:44px;z-index:9}
+#badge{position:absolute;top:14px;right:24px;font-size:15px;color:#8b949e;z-index:9}
+.big{font-size:80px;font-weight:700}
+</style></head><body>
+<div id="badge"></div>
+<div class="scene" id="s_title"><h1>qnx-agent-kit</h1><div class="sub">Give an AI coding agent the scheduler's view of a QNX 8.0 target.<br><br>MCP tools · qcc · tracelogger · pidin · priority inheritance</div></div>
+<div class="scene" id="s_bug"><h2>The program: rt_loop.c</h2>
+<table><tr><th>thread</th><th>priority</th><th>job</th></tr>
+<tr><td>control</td><td>50</td><td>1 kHz control loop — must not stall</td></tr>
+<tr><td>uploader</td><td>30</td><td>woken by logger, spins 4 ms, never takes the lock</td></tr>
+<tr><td>logger</td><td>10</td><td>copies shared state under the lock</td></tr></table>
+<pre style="font-size:22px;margin-top:28px">static sem_t lock;   /* shared by control + logger */
+#define LOCK()   sem_wait(&amp;lock)
+#define UNLOCK() sem_post(&amp;lock)</pre>
+<div class="sub">Symptom: the control loop "sometimes stalls". The agent is not told why.</div></div>
+<div class="scene" id="s_kit"><h2>The kit: one Python file, 7 MCP tools</h2>
+<pre style="font-size:22px">qnx_env      check SDP, qcc, target reachability
+qnx_image    build / start / stop a QNX 8.0 VM (mkqnximage)
+qnx_build    qcc build, diagnostics as JSON
+qnx_deploy   scp binary to target
+qnx_run      run on target, capture output
+qnx_trace    tracelogger on target → decode on host → per-thread summary
+qnx_inspect  pidin snapshots: thread states, priorities</pre>
+<div class="sub">+ SKILL.md: QNX rules the agent reads first (e.g. "semaphores don't inherit priority").</div></div>
+<div class="scene" id="s_prompt"><h2>The prompt (verbatim)</h2><pre id="prompt" style="white-space:pre-wrap;font-size:21px"></pre></div>
+<div class="scene" id="s_run"><div class="term" id="term"></div></div>
+<div class="scene" id="s_ba"><h2>Before / after — same VM, pinned to CPU 0, 3 runs each</h2>
+<table><tr><th></th><th>sem_t (before)</th><th>PI mutex (after)</th></tr>
+<tr><td>lock waits &gt; 1 ms (per 5 s)</td><td class="hl">128 – 157</td><td class="good">0 – 3</td></tr>
+<tr><td>total lock wait</td><td class="hl">458 – 640 ms</td><td class="good">50 – 73 ms</td></tr>
+<tr><td>trace: control blocked on</td><td>SEM (122×)</td><td>MUTEX, short</td></tr></table>
+<div class="sub" style="margin-top:28px">Agent run: 16 turns · 118 s · $0.36 · no hints in the source.<br>Wake lateness is not used: VirtualBox timer jitter is 40–50 ms (the kit's SKILL.md says so).</div></div>
+<div class="scene" id="s_end"><h1 style="margin-top:120px">Try it in ~45 minutes</h1><div class="sub">CODELAB.md: install SDP 8.0 (free non-commercial), boot the VM, connect the agent, find the bug.<br><br><span style="color:#79c0ff;font-size:32px">__REPO__</span><br><br>MIT licence</div></div>
+<div id="cap"></div>
+<script>
+const EV=__EVENTS__, REPORT=__REPORT__;
+const PROMPT=`Task: the 1 kHz control loop in rt-loop sometimes stalls. Build it, run it pinned to one CPU (on -C 0 /data/rt_loop), find out why using the QNX tools (trace, inspect), fix it in the source, and prove the fix with before/after numbers.
+Note: this target is a VirtualBox VM with large timer jitter, so judge by lock-wait numbers rather than wake lateness.
+End with a short report: root cause, evidence, fix, numbers.`;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const cap=t=>document.getElementById('cap').textContent=t;
+const show=id=>{document.querySelectorAll('.scene').forEach(s=>s.classList.toggle('on',s.id===id));};
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+function mark(s){return esc(s).replace(/(lock_waits_over_1ms=\d+|total_lock_wait_ms=\d+)/g,'<span class="hl">$1</span>').replace(/(SEM control \d+|MUTEX control \d+)/g,'<span class="hl">$1</span>');}
+const CAPS=[[/^Code read/,'The agent reads the code and forms a hypothesis — then measures before touching anything.'],
+[/^qnx_build/,'Builds with qcc on the Windows host (QNX SDP 8.0).'],
+[/^qnx_run.*for i/,'Runs 3× on the QNX target, pinned to CPU 0.'],
+[/^Baseline/,'Baseline: 128–156 lock waits over 1 ms in 5 s.'],
+[/^qnx_trace/,'Kernel trace: tracelogger on target, decoded on host into a per-thread summary.'],
+[/^Trace confirms/,'Prio 50 control blocked on SEM; prio 30 uploader running: priority inversion.'],
+[/^- static sem_t/,'Fix: QNX mutexes support priority inheritance. Semaphores do not.'],
+[/^qnx_run.*ls -l/,'Rebuild, redeploy, re-measure.'],
+[/^The fixed binary/,'Lock waits over 1 ms: 0–3. A second trace for the after picture.']];
+async function typeInto(el,text,cps){for(let i=0;i<text.length;i+=Math.max(1,Math.round(cps/30))){el.textContent=text.slice(0,i);await sleep(33);}el.textContent=text;}
+async function run(){
+ const b=document.getElementById('badge');
+ show('s_title');cap('AI agents can\'t see real-time bugs. Let\'s give them the scheduler\'s view.');await sleep(9000);
+ show('s_bug');cap('A classic: high-priority loop shares a lock with a low-priority logger.');await sleep(13000);
+ show('s_kit');cap('qnx-agent-kit plugs a QNX 8.0 target into any MCP-capable agent.');await sleep(12000);
+ show('s_prompt');cap('One prompt. No hints about the cause.');await typeInto(document.getElementById('prompt'),PROMPT,140);await sleep(3500);
+ show('s_run');b.textContent='Replay of a real Claude Code run, 2026-11-16 · sped up';
+ const term=document.getElementById('term');cap('');
+ for(const [k,t] of EV){
+  for(const [re,c] of CAPS) if(re.test(t)) cap(c);
+  const d=document.createElement('div');d.className=k;
+  if(k==='diff'){d.innerHTML=t.split('\n').map(l=>`<span class="${l[0]==='-'?'del':'add'}">${esc(l)}</span>`).join('\n');}
+  else if(k==='out'){d.innerHTML=mark(t);} else d.textContent=t;
+  term.appendChild(d);while(term.scrollHeight>term.clientHeight&&term.children.length>1)term.removeChild(term.firstChild);
+  await sleep(k==='out'?5200:k==='diff'?6500:k==='say'?4200:2200);
+ }
+ cap('The agent ends with a report: root cause, evidence, fix, numbers.');
+ const d=document.createElement('div');d.className='say';d.textContent=REPORT.split('**Evidence')[0].trim()+'\n\n[full report in the repo: agent-run/run2/REPORT.md]';term.innerHTML='';term.appendChild(d);await sleep(10000);
+ b.textContent='';show('s_ba');cap('Fixed — with numbers, not vibes.');await sleep(14000);
+ show('s_end');cap('qnx-agent-kit — QNX Global Hackathon 2026 · Developer Tooling &amp; Host Tools');await sleep(9000);
+ document.title='DONE';
+}
+run();
+</script></body></html>

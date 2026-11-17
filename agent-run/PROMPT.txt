@@ -1,0 +1,4 @@
+You are working on a QNX 8.0 x86_64 target through the "qnx" MCP tools (read SKILL.md first).
+The project source is ./rt-loop (you edit it here); on the build host it lives at E:\qnx-agent\rt-loop and is built with `build.bat` (qnx_build project_dir=E:\qnx-agent\rt-loop command=build.bat syncs your local edits first). Deploy E:\qnx-agent\rt-loop\rt_loop to /data/.
+Task: the 1 kHz control loop in rt-loop sometimes stalls. Build it, run it pinned to one CPU (`on -C 0 /data/rt_loop`), find out why using the QNX tools (trace, inspect), fix it in the source, and prove the fix with before/after numbers. Note: this target is a VirtualBox VM with large timer jitter, so judge by lock-wait numbers rather than wake lateness. End with a short report: root cause, evidence, fix, numbers.
+Write the final report in English.
